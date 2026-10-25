@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "net.h"
 
 // 74HC595 (already wired on the PCB)
 static const int PIN_SER   = 14;  // data
@@ -97,10 +98,16 @@ void setup() {
 
   sensors.begin();
   sensors.setResolution(12);
+  sensors.setWaitForConversion(false);
+
+  netSetup();
 }
 
-void loop() {
-  sensors.requestTemperatures();
+static char statusLine[180] = "starting";
+
+const char *heatingStatus() { return statusLine; }
+
+static void controlStep() {
   float t = sensors.getTempCByIndex(0);
   bool sensorOk = (t > -50.0f && t < 125.0f);
 
@@ -136,19 +143,39 @@ void loop() {
 
   applyOutputs(valveFireplace, heater, pumps);
 
-  Serial.print(F("T="));
-  if (sensorOk) Serial.print(t, 1);
-  else Serial.print(F("NO_SENSOR"));
-  Serial.print(F("  mode="));
-  Serial.print(mode == FIREPLACE ? F("FIREPLACE") : F("ELECTRIC"));
-  Serial.print(F("  call="));
-  Serial.print(call ? 1 : 0);
-  Serial.print(F("  valve="));
-  Serial.print(valveFireplace ? F("FP") : F("EL"));
-  Serial.print(F("  heat="));
-  Serial.print(heater);
-  Serial.print(F("  pumps="));
-  Serial.println(pumps);
-
-  delay(250);
+  char wifi[40];
+  char temp[16];
+  netStatus(wifi, sizeof(wifi));
+  if (sensorOk) snprintf(temp, sizeof(temp), "%.1f", t);
+  else snprintf(temp, sizeof(temp), "NO_SENSOR");
+  snprintf(statusLine, sizeof(statusLine),
+           "T=%s  mode=%s  call=%d  valve=%s  heat=%d  pumps=%d  wifi=%s",
+           temp,
+           mode == FIREPLACE ? "FIREPLACE" : "ELECTRIC",
+           call ? 1 : 0,
+           valveFireplace ? "FP" : "EL",
+           heater ? 1 : 0,
+           pumps ? 1 : 0,
+           wifi);
+  Serial.println(statusLine);
 }
+
+void loop() {
+  netLoop();
+  if (netOtaBusy()) return;
+
+  static uint32_t lastReq = 0;
+  static bool waiting = false;
+  uint32_t now = millis();
+
+  if (!waiting && now - lastReq >= 1000) {
+    sensors.requestTemperatures();
+    lastReq = now;
+    waiting = true;
+  }
+  if (waiting && now - lastReq >= 800) {
+    waiting = false;
+    controlStep();
+  }
+}
+

@@ -114,7 +114,46 @@ A healthy boot prints a status line about four times a second:
 T=NO_SENSOR  mode=ELECTRIC  call=0  valve=EL  heat=0  pumps=0
 ```
 
-`NO_SENSOR` is normal when no DS18B20 is connected on GPIO23. With a sensor, `T=` is a temperature. Relays 1–4 click once at boot (the click test in the firmware). Channels 5–16 stay off.
+`NO_SENSOR` is normal when no DS18B20 is connected on GPIO23. With a sensor, `T=` is a temperature. Relays 1–4 click once at boot (the click test in the firmware). Channels 5–16 stay off. The status line also shows `wifi=setup`, `wifi=down`, or the board's IP.
+
+This firmware has to be flashed over the serial bridge **once**. After that, updates can go over Wi-Fi.
+
+## Wi-Fi setup
+
+On first boot (or if the saved network cannot be joined) the board opens a setup network and keeps controlling the relays.
+
+1. Join the Wi-Fi network `Heating-Setup`. Password: `heatsetup`.
+2. Open `http://192.168.4.1` if the captive portal does not pop up. Use http, not https.
+3. Pick the house network, enter its password, and save.
+
+The serial log prints the address when it connects, for example `wifi=192.168.1.50`. The board is also at `http://heating.local/` when mDNS works.
+
+To change networks later, either:
+
+- open the page and use **Forget Wi-Fi**, or
+- hold the relay board **IO0** button for 5 seconds.
+
+Both erase the saved network and reboot into `Heating-Setup`.
+
+## OTA
+
+**Browser, on the house network.** Open `http://<board-ip>/` (or `http://heating.local/`). Log in as `admin` / `heatota`. Upload `.pio/build/relay/firmware.bin`. The board reboots into the new firmware.
+
+**Browser, from the setup network.** `http://192.168.4.1` has an Update page too, so a `.bin` can be loaded before the board has joined the house network. That page is protected by the setup Wi-Fi password, not `heatota`.
+
+**PlatformIO.** Password `heatota`. From this folder, once the board is on the network:
+
+```
+pio run -t upload -e relay-ota
+```
+
+That targets `heating.local`. If the name does not resolve, use the IP from the serial log:
+
+```
+pio run -t upload -e relay-ota --upload-port 192.168.x.x
+```
+
+Do not use the `relay` environment for this. `relay` is the serial bridge upload. `relay-ota` is the Wi-Fi upload. The partition table is `default.csv` (two app slots). OTA will fail if that is changed to a single huge app.
 
 ## When it fails
 
