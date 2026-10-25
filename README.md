@@ -137,9 +137,9 @@ Both erase the saved network and reboot into `Heating-Setup`.
 
 ## OTA
 
-**Browser, on the house network.** Open `http://<board-ip>/` (or `http://heating.local/`). Log in as `admin` / `heatota`. Upload `.pio/build/relay/firmware.bin`. The board reboots into the new firmware.
+**Browser, on the house network.** Open `http://<board-ip>/` (or `http://heating.local/`). Log in as `admin` / `heatota`. Press **OTA update**. The board downloads `firmware.bin` from the latest GitHub release and reboots into it. The file upload under that button is only needed if you want a local build instead.
 
-**Browser, from the setup network.** `http://192.168.4.1` has an Update page too, so a `.bin` can be loaded before the board has joined the house network. That page is protected by the setup Wi-Fi password, not `heatota`.
+**Browser, from the setup network.** The setup portal at `http://192.168.4.1` has the same **OTA update** button. It can download the release only when the board is already joined to a network with internet. Otherwise use the portal's **Update** button and upload a `.bin` file. The setup portal is protected by the setup Wi-Fi password, not `heatota`.
 
 **PlatformIO.** Password `heatota`. From this folder, once the board is on the network:
 
