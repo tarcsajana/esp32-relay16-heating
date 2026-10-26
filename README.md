@@ -111,7 +111,7 @@ pio device monitor -e relay
 A healthy boot prints a status line about four times a second:
 
 ```
-T=NO_SENSOR  mode=ELECTRIC  call=0  valve=EL  heat=0  pumps=0
+T=NO_SENSOR  mode=FIREPLACE  t1=0 t2=0  valve=FP  heat=0  p1=0 p2=0
 ```
 
 `NO_SENSOR` is normal when no DS18B20 is connected on GPIO23. With a sensor, `T=` is a temperature. Relays 1–4 click once at boot (the click test in the firmware). Channels 5–16 stay off. The status line also shows `wifi=setup`, `wifi=down`, or the board's IP.

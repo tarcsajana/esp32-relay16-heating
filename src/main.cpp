@@ -33,9 +33,9 @@ static const bool BOOT_CLICK_TEST = true;
 OneWire oneWire(PIN_ONEWIRE);
 DallasTemperature sensors(&oneWire);
 
-enum Mode { ELECTRIC, FIREPLACE };
-Mode mode = ELECTRIC;
-bool pumpsLatched = false;
+// Fireplace is the default circuit. Electric is backup only.
+bool fireDump = false;   // T>=75 on, T<=35 off — fireplace session
+bool dumpPumps = false;  // T>=75 on, T<=55 off — both pumps forced
 uint16_t relayMask = 0;
 
 void writeRelays(uint16_t mask) {
@@ -55,12 +55,10 @@ void setRelay(int channel, bool on) {
   writeRelays(relayMask);
 }
 
-void applyOutputs(bool valveFireplace, bool heater, bool pumps) {
+void applyOutputs(bool valveFireplace, bool heater, bool pump1, bool pump2) {
   uint16_t mask = 0;
-  if (pumps) {
-    mask |= (1u << RELAY_PUMP1);
-    mask |= (1u << RELAY_PUMP2);
-  }
+  if (pump1) mask |= (1u << RELAY_PUMP1);
+  if (pump2) mask |= (1u << RELAY_PUMP2);
   if (heater) mask |= (1u << RELAY_HEATER);
   if (valveFireplace) mask |= (1u << RELAY_VALVE);
   writeRelays(mask);
@@ -111,37 +109,50 @@ static void controlStep() {
   float t = sensors.getTempCByIndex(0);
   bool sensorOk = (t > -50.0f && t < 125.0f);
 
-  bool call = (digitalRead(PIN_TSTAT1) == LOW) ||
-              (digitalRead(PIN_TSTAT2) == LOW);
+  bool tstat1 = (digitalRead(PIN_TSTAT1) == LOW);
+  bool tstat2 = (digitalRead(PIN_TSTAT2) == LOW);
+  bool call = tstat1 || tstat2;
 
   if (!sensorOk) {
-    mode = ELECTRIC;
-    pumpsLatched = false;
-  } else if (mode == ELECTRIC && t >= T_FIRE_ON) {
-    mode = FIREPLACE;
-    pumpsLatched = true;
-  } else if (mode == FIREPLACE && t <= T_FIRE_OFF) {
-    mode = ELECTRIC;
-    pumpsLatched = false;
+    fireDump = false;
+    dumpPumps = false;
+  } else {
+    if (t >= T_FIRE_ON) {
+      fireDump = true;
+      dumpPumps = true;
+    }
+    if (t <= T_PUMP_OFF) dumpPumps = false;   // 55°C: pumps rest, session stays
+    if (t <= T_FIRE_OFF) fireDump = false;    // 35°C: fireplace session ends
   }
 
-  bool valveFireplace = false;
-  bool heater = false;
-  bool pumps = false;
+  // Electric only when the fireplace water is cold AND a room asks for heat.
+  bool wantElectric = call && (!sensorOk || t <= T_FIRE_OFF);
 
-  if (mode == FIREPLACE && sensorOk) {
+  bool valveFireplace;
+  bool heater;
+  bool pump1;
+  bool pump2;
+
+  if (fireDump) {
     valveFireplace = true;
     heater = false;
-    if (t >= T_FIRE_ON) pumpsLatched = true;
-    if (t <= T_PUMP_OFF) pumpsLatched = false;
-    pumps = pumpsLatched;
-  } else {
+    pump1 = dumpPumps;
+    pump2 = dumpPumps;
+  } else if (wantElectric) {
     valveFireplace = false;
-    heater = call;
-    pumps = call;
+    heater = true;
+    pump1 = tstat1;
+    pump2 = tstat2;
+  } else {
+    valveFireplace = true;
+    heater = false;
+    pump1 = tstat1;
+    pump2 = tstat2;
   }
 
-  applyOutputs(valveFireplace, heater, pumps);
+  applyOutputs(valveFireplace, heater, pump1, pump2);
+
+  const char *modeName = fireDump ? "FIRE_DUMP" : (wantElectric ? "ELECTRIC" : "FIREPLACE");
 
   char wifi[40];
   char temp[16];
@@ -149,13 +160,15 @@ static void controlStep() {
   if (sensorOk) snprintf(temp, sizeof(temp), "%.1f", t);
   else snprintf(temp, sizeof(temp), "NO_SENSOR");
   snprintf(statusLine, sizeof(statusLine),
-           "T=%s  mode=%s  call=%d  valve=%s  heat=%d  pumps=%d  wifi=%s",
+           "T=%s  mode=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
            temp,
-           mode == FIREPLACE ? "FIREPLACE" : "ELECTRIC",
-           call ? 1 : 0,
+           modeName,
+           tstat1 ? 1 : 0,
+           tstat2 ? 1 : 0,
            valveFireplace ? "FP" : "EL",
            heater ? 1 : 0,
-           pumps ? 1 : 0,
+           pump1 ? 1 : 0,
+           pump2 ? 1 : 0,
            wifi);
   Serial.println(statusLine);
 }
