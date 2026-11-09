@@ -1,3 +1,6 @@
 {
-  "platformio-ide.autoCloseSerialMonitor": true
+  "platformio-ide.autoCloseSerialMonitor": true,
+  "files.associations": {
+    "platformio.ini": "ini"
+  }
 }
