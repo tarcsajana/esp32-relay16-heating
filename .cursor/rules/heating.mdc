@@ -13,6 +13,6 @@ Control logic lives in `controlStep()`:
 - fireDump latches at ≥ 75 °C and clears at ≤ 35 °C. dumpPumps latches at ≥ 75 °C and clears at ≤ 55 °C.
 - During fireDump: valve fireplace, heater off; both pumps ON if dumpPumps else both OFF (55–35 °C band ignores thermostats).
 - Otherwise pump1 = TSTAT1 (GPIO16), pump2 = TSTAT2 (GPIO17).
-- JC3248W535C remote is `env:remote` (USB-C on the panel). Do not flash it through the C3 bridge.
+- JC3248W535C remote is `env:remote` (USB-C on the panel). Do not flash it through the C3 bridge. Pins and GUI constraints: `SCREEN.md`.
 
 Serial upload is through the C3 SuperMini at 115200 with no_reset. Do not flash C3 firmware here. Full flash/OTA notes: README.md.

@@ -54,6 +54,7 @@ Do not set `use_1200bps_touch` or pass `--before=no_reset` via `upload_flags` (P
 - `src/net.cpp` / `net.h` — Wi-Fi manager, status page, OTA
 - `src/udp_heat.cpp` — UDP 4210 listen, broadcast status to 4211, persist `req`
 - `src/remote/` — JC3248W535C panel (Arduino_GFX, not LVGL). USB-C upload, `env:remote`
+- `SCREEN.md` — panel SoC, QSPI/touch pins, flash, UDP. Read before editing `src/remote/`
 - `platformio.ini` — `env:relay` serial, `env:relay-ota` Wi-Fi, `env:remote` panel
 
 Status line: `T=  mode=FIRE_DUMP|ELECTRIC|FIREPLACE  req=AUTO|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
