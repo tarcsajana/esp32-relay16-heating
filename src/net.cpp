@@ -1,4 +1,5 @@
 #include "net.h"
+#include "udp_heat.h"
 
 #include <Arduino.h>
 #include <ArduinoOTA.h>
@@ -192,6 +193,7 @@ static void startServices() {
     Serial.printf("ArduinoOTA error %u\n", err);
   });
   ArduinoOTA.begin();
+  heatUdpOnWifi();
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/forget", HTTP_POST, handleForget);
@@ -223,6 +225,7 @@ static void pollIo0() {
 
 void netSetup() {
   pinMode(0, INPUT_PULLUP);
+  heatUdpSetup();
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   wm.setHostname(HOSTNAME);
@@ -263,6 +266,7 @@ void netLoop() {
   if (servicesStarted) {
     server.handleClient();
     ArduinoOTA.handle();
+    if (!otaBusy) heatUdpLoop();
   }
 }
 

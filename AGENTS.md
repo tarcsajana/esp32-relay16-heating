@@ -6,7 +6,7 @@ Sister folder (USB-TTL bridge only): `../esp32c3-usb-ttl-bridge`. Never flash `e
 
 ## Control logic (source of truth)
 
-Fireplace is the **default**. There is no user mode switch. Electric is automatic backup only.
+Fireplace is the **default**. The JC3248W535C remote can request AUTO / ELECTRIC / FIREPLACE over UDP; AUTO is the same automatic logic as before. Electric is backup only in AUTO. `fireDump` always overrides a remote ELECTRIC request.
 
 Thresholds on the DS18B20 at the fireplace pipe:
 
@@ -19,12 +19,12 @@ Thresholds on the DS18B20 at the fireplace pipe:
 Outputs:
 
 - **fireDump** (fireplace session, 75 °C → 35 °C): valve = fireplace, heater OFF. Pumps: both ON if `dumpPumps`, else **both OFF** (the 55–35 °C band). Ignore thermostats for pumps.
-- **Electric**: only if a thermostat is calling **and** (`T ≤ 35 °C` or sensor missing). Valve = electric, heater ON. Pump1 = TSTAT1, pump2 = TSTAT2.
-- **Else** (default): valve = fireplace, heater OFF. Pump1 = TSTAT1, pump2 = TSTAT2.
+- **Electric**: AUTO when a thermostat is calling **and** (`T ≤ 35 °C` or sensor missing), or remote ELECTRIC (heater still follows `call`). Valve = electric. Pump1 = TSTAT1, pump2 = TSTAT2.
+- **Else** (AUTO default or remote FIREPLACE): valve = fireplace, heater OFF. Pump1 = TSTAT1, pump2 = TSTAT2.
 
 `call` = TSTAT1 OR TSTAT2 (heater enable only). Pumps are per-zone except during dump.
 
-Keep this in `controlStep()` in `src/main.cpp`. Do not go back to a user-selectable ELECTRIC/FIREPLACE mode or gang both pumps to one OR in normal operation.
+Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR in normal operation. Remote mode is UDP only (`req=` on the status line); dump still wins.
 
 ## Pins
 
@@ -52,6 +52,10 @@ Do not set `use_1200bps_touch` or pass `--before=no_reset` via `upload_flags` (P
 
 - `src/main.cpp` — 595 + heating state machine + boot click of relays 1–4
 - `src/net.cpp` / `net.h` — Wi-Fi manager, status page, OTA
-- `platformio.ini` — `env:relay` serial, `env:relay-ota` Wi-Fi
+- `src/udp_heat.cpp` — UDP 4210 listen, broadcast status to 4211, persist `req`
+- `src/remote/` — JC3248W535C panel (Arduino_GFX, not LVGL). USB-C upload, `env:remote`
+- `platformio.ini` — `env:relay` serial, `env:relay-ota` Wi-Fi, `env:remote` panel
 
-Status line: `T=  mode=FIRE_DUMP|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
+Status line: `T=  mode=FIRE_DUMP|ELECTRIC|FIREPLACE  req=AUTO|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
+
+UDP: relay `:4210` ← `MODE AUTO|ELECTRIC|FIREPLACE` / `HEAT?`. Relay → remote `:4211` `HEAT T= mode= req= ...`. Remote shows red `No connection` if no packet for 30 s.

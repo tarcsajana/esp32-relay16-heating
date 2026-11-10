@@ -5,6 +5,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "net.h"
+#include "udp_heat.h"
 
 // 74HC595 (already wired on the PCB)
 static const int PIN_SER   = 14;  // data
@@ -125,8 +126,11 @@ static void controlStep() {
     if (t <= T_FIRE_OFF) fireDump = false;    // 35°C: fireplace session ends
   }
 
-  // Electric only when the fireplace water is cold AND a room asks for heat.
-  bool wantElectric = call && (!sensorOk || t <= T_FIRE_OFF);
+  // AUTO: electric only when fireplace water is cold AND a room asks for heat.
+  // ELECTRIC / FIREPLACE: remote force. fireDump still wins.
+  bool autoElectric = call && (!sensorOk || t <= T_FIRE_OFF);
+  HeatRequest req = heatRequest();
+  bool forceElectric = (req == HEAT_REQ_ELECTRIC);
 
   bool valveFireplace;
   bool heater;
@@ -138,9 +142,9 @@ static void controlStep() {
     heater = false;
     pump1 = dumpPumps;
     pump2 = dumpPumps;
-  } else if (wantElectric) {
+  } else if (forceElectric || (req == HEAT_REQ_AUTO && autoElectric)) {
     valveFireplace = false;
-    heater = true;
+    heater = call;
     pump1 = tstat1;
     pump2 = tstat2;
   } else {
@@ -152,17 +156,19 @@ static void controlStep() {
 
   applyOutputs(valveFireplace, heater, pump1, pump2);
 
-  const char *modeName = fireDump ? "FIRE_DUMP" : (wantElectric ? "ELECTRIC" : "FIREPLACE");
+  const char *modeName = fireDump ? "FIRE_DUMP" : (!valveFireplace ? "ELECTRIC" : "FIREPLACE");
 
   char wifi[40];
   char temp[16];
+  char udpLine[180];
   netStatus(wifi, sizeof(wifi));
   if (sensorOk) snprintf(temp, sizeof(temp), "%.1f", t);
-  else snprintf(temp, sizeof(temp), "NO_SENSOR");
+  else snprintf(temp, sizeof(temp), "--");
   snprintf(statusLine, sizeof(statusLine),
-           "T=%s  mode=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
-           temp,
+           "T=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
+           sensorOk ? temp : "NO_SENSOR",
            modeName,
+           heatRequestName(),
            tstat1 ? 1 : 0,
            tstat2 ? 1 : 0,
            valveFireplace ? "FP" : "EL",
@@ -170,6 +176,19 @@ static void controlStep() {
            pump1 ? 1 : 0,
            pump2 ? 1 : 0,
            wifi);
+  snprintf(udpLine, sizeof(udpLine),
+           "HEAT T=%s mode=%s req=%s t1=%d t2=%d valve=%s heat=%d p1=%d p2=%d",
+           temp,
+           modeName,
+           heatRequestName(),
+           tstat1 ? 1 : 0,
+           tstat2 ? 1 : 0,
+           valveFireplace ? "FP" : "EL",
+           heater ? 1 : 0,
+           pump1 ? 1 : 0,
+           pump2 ? 1 : 0);
+  heatUdpSetPacket(udpLine);
+  heatUdpSendStatus();
   Serial.println(statusLine);
 }
 

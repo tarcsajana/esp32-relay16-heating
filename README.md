@@ -111,7 +111,7 @@ pio device monitor -e relay
 A healthy boot prints a status line about four times a second:
 
 ```
-T=NO_SENSOR  mode=FIREPLACE  t1=0 t2=0  valve=FP  heat=0  p1=0 p2=0
+T=NO_SENSOR  mode=FIREPLACE  req=AUTO  t1=0 t2=0  valve=FP  heat=0  p1=0 p2=0
 ```
 
 `NO_SENSOR` is normal when no DS18B20 is connected on GPIO23. With a sensor, `T=` is a temperature. Relays 1–4 click once at boot (the click test in the firmware). Channels 5–16 stay off. The status line also shows `wifi=setup`, `wifi=down`, or the board's IP.
@@ -154,6 +154,26 @@ pio run -t upload -e relay-ota --upload-port 192.168.x.x
 ```
 
 Do not use the `relay` environment for this. `relay` is the serial bridge upload. `relay-ota` is the Wi-Fi upload. The partition table is `default.csv` (two app slots). OTA will fail if that is changed to a single huge app.
+
+## Touch remote (JC3248W535C)
+
+The 3.5" ESP32-S3 panel is a UDP remote for the same heating box. GUI is Arduino_GFX (LVGL is unreliable on the AXS15231B QSPI panel). Three buttons: **Auto**, **Electric**, **Fireplace**. Auto is the built-in logic. A dump at ≥ 75 °C still forces fireplace regardless of the button.
+
+Plug USB-C into the **panel**, not the SuperMini:
+
+```
+pio run -t upload -e remote
+```
+
+On first boot join `HeatRemote-Setup` / `heatsetup` and pick the house Wi-Fi (same network as the relay). The panel discovers `heating` by UDP broadcast.
+
+| | |
+|---|---|
+| Status | relay broadcasts `HEAT T=… mode=… req=…` to UDP **4211** about once a second |
+| Commands | panel sends `MODE AUTO` / `MODE ELECTRIC` / `MODE FIREPLACE` to UDP **4210** |
+| Connection | top-right **Connected** (green). If no UDP packet for **30 s**, it turns red **No connection** |
+
+Temperature is the fireplace-pipe DS18B20 from the relay. The selected button is the last request (`req=`); **LIVE** is what the relays are actually doing.
 
 ## When it fails
 
