@@ -167,6 +167,8 @@ pio run -t upload -e remote
 
 On first boot join `HeatRemote-Setup` / `heatsetup` and pick the house Wi-Fi (same network as the relay). The panel discovers `heating` by UDP broadcast.
 
+**SETUP** (top-left) opens the on-screen page: IP, SSID, `heat-remote.local`, **OTA from GitHub** (`remote.bin` from the latest release), and **Reset Wi-Fi** (tap twice). Hold **BOOT** 5 s to forget Wi-Fi the same way. Browser: `http://heat-remote.local/` or the panel IP, login `admin` / `heatota`. PlatformIO: `pio run -t upload -e remote-ota` (password `heatota`).
+
 | | |
 |---|---|
 | Status | relay broadcasts `HEAT T=… mode=… req=…` to UDP **4211** about once a second |

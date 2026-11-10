@@ -75,6 +75,8 @@ Default reset is OK (unlike the relay). If upload never connects: hold **BOOT**,
 
 First boot: AP `HeatRemote-Setup` / `heatsetup` at http://192.168.4.1. Same house Wi-Fi as the relay.
 
+On-screen **SETUP**: IP, SSID, `heat-remote.local`, GitHub OTA (`remote.bin` from the latest release), Reset Wi-Fi (tap twice). Hold **BOOT** (GPIO0) 5 s to forget Wi-Fi. Web: `http://heat-remote.local/` login `admin` / `heatota`. PlatformIO OTA: `pio run -t upload -e remote-ota`.
+
 ## UDP (same network as the relay)
 
 | | |

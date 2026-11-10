@@ -36,19 +36,26 @@ static bool haveStatus = false;
 static bool dirty = true;
 static bool touching = false;
 static uint32_t lastTapMs = 0;
+static bool setupPage = false;
+static uint32_t resetArmedUntil = 0;
 
 struct Btn {
   int x, y, w, h;
   const char *label;
   const char *token;
   uint16_t accent;
+  int textSize;
 };
 
-static Btn btns[3] = {
-    {16, 268, 288, 62, "AUTO", "AUTO", COL_AUTO},
-    {16, 340, 288, 62, "ELECTRIC", "ELECTRIC", COL_ELEC},
-    {16, 412, 288, 62, "FIREPLACE", "FIREPLACE", COL_FIRE},
+static Btn modeBtns[3] = {
+    {16, 268, 288, 62, "AUTO", "AUTO", COL_AUTO, 3},
+    {16, 340, 288, 62, "ELECTRIC", "ELECTRIC", COL_ELEC, 3},
+    {16, 412, 288, 62, "FIREPLACE", "FIREPLACE", COL_FIRE, 3},
 };
+static Btn setupOpen = {12, 6, 108, 36, "SETUP", "SETUP", COL_MUTED, 2};
+static Btn backBtn = {210, 8, 98, 36, "Back", "BACK", COL_MUTED, 2};
+static Btn otaBtn = {16, 288, 288, 62, "OTA from GitHub", "OTA", COL_AUTO, 2};
+static Btn wifiBtn = {16, 366, 288, 62, "Reset Wi-Fi", "WIFI_RESET", COL_BAD, 2};
 
 static void centerText(const char *s, int y, int size, uint16_t color) {
   gfx->setTextSize(size);
@@ -65,6 +72,10 @@ static void labelAt(const char *s, int x, int y, int size, uint16_t color) {
   gfx->setTextColor(color);
   gfx->setCursor(x, y);
   gfx->print(s);
+}
+
+static bool inBtn(const Btn &b, int x, int y) {
+  return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
 }
 
 static bool probeAddr(uint8_t addr) {
@@ -99,93 +110,26 @@ static bool readTouch(int16_t &x, int16_t &y) {
   return true;
 }
 
-static void drawButton(const Btn &b, bool selected) {
+static void drawButton(const Btn &b, bool selected, const char *label) {
+  if (!label) label = b.label;
   uint16_t fill = selected ? b.accent : COL_CARD;
   uint16_t text = selected ? COL_BG : COL_TEXT;
   uint16_t border = b.accent;
   gfx->fillRoundRect(b.x, b.y, b.w, b.h, 14, fill);
   gfx->drawRoundRect(b.x, b.y, b.w, b.h, 14, border);
   gfx->drawRoundRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2, 13, border);
-  gfx->setTextSize(3);
+  gfx->setTextSize(b.textSize);
   gfx->setTextColor(text);
   int16_t x1, y1;
   uint16_t tw, th;
-  gfx->getTextBounds(b.label, 0, 0, &x1, &y1, &tw, &th);
+  gfx->getTextBounds(label, 0, 0, &x1, &y1, &tw, &th);
   gfx->setCursor(b.x + (b.w - (int)tw) / 2, b.y + (b.h - (int)th) / 2);
-  gfx->print(b.label);
+  gfx->print(label);
 }
 
-void uiBegin() {
-  pinMode(PIN_BL, OUTPUT);
-  digitalWrite(PIN_BL, HIGH);
-  pinMode(PIN_INT, INPUT_PULLUP);
+static void drawHome() {
+  drawButton(setupOpen, false, nullptr);
 
-  bus = new Arduino_ESP32QSPI(45, 47, 21, 48, 40, 39);
-  panel = new Arduino_AXS15231B(bus, GFX_NOT_DEFINED, 0, false, W, H);
-  gfx = new Arduino_Canvas(W, H, panel, 0, 0, 0);
-  if (!gfx->begin()) {
-    Serial.println("Display init failed");
-  }
-  gfx->fillScreen(COL_BG);
-  centerText("Heating", 200, 3, COL_TEXT);
-  centerText("starting...", 250, 2, COL_MUTED);
-  gfx->flush();
-
-  Wire.begin(PIN_SDA, PIN_SCL);
-  Wire.setClock(400000);
-  delay(50);
-  if (probeAddr(0x3B)) touchAddr = 0x3B;
-  else if (probeAddr(0x38)) touchAddr = 0x38;
-  Serial.printf("Touch I2C addr 0x%02X\n", touchAddr);
-
-  memset(&st, 0, sizeof(st));
-  strncpy(st.temp, "--", sizeof(st.temp));
-  strncpy(st.mode, "--", sizeof(st.mode));
-  strncpy(st.req, "AUTO", sizeof(st.req));
-  strncpy(st.valve, "--", sizeof(st.valve));
-  strncpy(st.wifiInfo, "wifi", sizeof(st.wifiInfo));
-  haveStatus = true;
-  dirty = true;
-}
-
-void uiSetStatus(const RemoteStatus &s) {
-  if (memcmp(&st, &s, sizeof(RemoteStatus)) != 0) {
-    st = s;
-    haveStatus = true;
-    dirty = true;
-  }
-}
-
-const char *uiPollTap() {
-  int16_t x, y;
-  bool down = readTouch(x, y);
-  const char *hit = nullptr;
-  if (down && !touching) {
-    uint32_t now = millis();
-    if (now - lastTapMs > 250) {
-      for (int i = 0; i < 3; i++) {
-        if (x >= btns[i].x && x < btns[i].x + btns[i].w &&
-            y >= btns[i].y && y < btns[i].y + btns[i].h) {
-          hit = btns[i].token;
-          lastTapMs = now;
-          strncpy(st.req, hit, sizeof(st.req) - 1);
-          dirty = true;
-          break;
-        }
-      }
-    }
-  }
-  touching = down;
-  return hit;
-}
-
-void uiDraw() {
-  if (!dirty || !haveStatus) return;
-  dirty = false;
-
-  gfx->fillScreen(COL_BG);
-
-  labelAt("Heating", 14, 12, 2, COL_TEXT);
   const char *conn = st.udpFresh ? "Connected" : "No connection";
   uint16_t connCol = st.udpFresh ? COL_OK : COL_BAD;
   gfx->setTextSize(2);
@@ -237,9 +181,143 @@ void uiDraw() {
   centerText(bits, 236, 1, COL_MUTED);
 
   for (int i = 0; i < 3; i++) {
-    bool sel = (strcmp(st.req, btns[i].token) == 0);
-    drawButton(btns[i], sel);
+    bool sel = (strcmp(st.req, modeBtns[i].token) == 0);
+    drawButton(modeBtns[i], sel, nullptr);
+  }
+}
+
+static void drawSetup() {
+  labelAt("Setup", 16, 14, 2, COL_TEXT);
+  drawButton(backBtn, false, nullptr);
+
+  gfx->fillRoundRect(16, 52, 288, 216, 16, COL_CARD);
+  labelAt("IP", 32, 68, 1, COL_MUTED);
+  labelAt(st.wifiUp ? st.wifiInfo : (st.portal ? "192.168.4.1" : "--"), 32, 86, 2, COL_TEXT);
+
+  labelAt("Wi-Fi", 32, 122, 1, COL_MUTED);
+  const char *ssid = st.ssid[0] ? st.ssid : (st.portal ? "HeatRemote-Setup" : "--");
+  labelAt(ssid, 32, 140, 2, COL_TEXT);
+
+  labelAt("Page", 32, 176, 1, COL_MUTED);
+  labelAt(st.portal ? "http://192.168.4.1" : "heat-remote.local", 32, 194, 2, COL_TEXT);
+  labelAt("login admin / heatota", 32, 222, 1, COL_MUTED);
+
+  const char *note = st.note[0] ? st.note : (st.otaBusy ? "OTA in progress..." : "");
+  if (note[0]) {
+    labelAt(note, 32, 242, 1, st.otaBusy ? COL_ELEC : COL_MUTED);
   }
 
+  const char *otaLabel = st.otaBusy ? "OTA running..." : "OTA from GitHub";
+  drawButton(otaBtn, st.otaBusy, otaLabel);
+
+  bool armed = millis() < resetArmedUntil;
+  drawButton(wifiBtn, armed, armed ? "Tap again to reset" : "Reset Wi-Fi");
+}
+
+void uiBegin() {
+  pinMode(PIN_BL, OUTPUT);
+  digitalWrite(PIN_BL, HIGH);
+  pinMode(PIN_INT, INPUT_PULLUP);
+
+  bus = new Arduino_ESP32QSPI(45, 47, 21, 48, 40, 39);
+  panel = new Arduino_AXS15231B(bus, GFX_NOT_DEFINED, 0, false, W, H);
+  gfx = new Arduino_Canvas(W, H, panel, 0, 0, 0);
+  if (!gfx->begin()) {
+    Serial.println("Display init failed");
+  }
+  gfx->fillScreen(COL_BG);
+  centerText("Heating", 200, 3, COL_TEXT);
+  centerText("starting...", 250, 2, COL_MUTED);
+  gfx->flush();
+
+  Wire.begin(PIN_SDA, PIN_SCL);
+  Wire.setClock(400000);
+  delay(50);
+  if (probeAddr(0x3B)) touchAddr = 0x3B;
+  else if (probeAddr(0x38)) touchAddr = 0x38;
+  Serial.printf("Touch I2C addr 0x%02X\n", touchAddr);
+
+  memset(&st, 0, sizeof(st));
+  strncpy(st.temp, "--", sizeof(st.temp));
+  strncpy(st.mode, "--", sizeof(st.mode));
+  strncpy(st.req, "AUTO", sizeof(st.req));
+  strncpy(st.valve, "--", sizeof(st.valve));
+  strncpy(st.wifiInfo, "wifi", sizeof(st.wifiInfo));
+  haveStatus = true;
+  dirty = true;
+}
+
+void uiSetStatus(const RemoteStatus &s) {
+  if (memcmp(&st, &s, sizeof(RemoteStatus)) != 0) {
+    st = s;
+    haveStatus = true;
+    dirty = true;
+  }
+}
+
+void uiSetNote(const char *msg) {
+  strncpy(st.note, msg ? msg : "", sizeof(st.note) - 1);
+  st.note[sizeof(st.note) - 1] = 0;
+  dirty = true;
+}
+
+bool uiOnSetup() { return setupPage; }
+
+const char *uiPollTap() {
+  int16_t x, y;
+  bool down = readTouch(x, y);
+  const char *hit = nullptr;
+  if (down && !touching) {
+    uint32_t now = millis();
+    if (now - lastTapMs > 250) {
+      lastTapMs = now;
+      if (setupPage) {
+        if (inBtn(backBtn, x, y)) {
+          setupPage = false;
+          resetArmedUntil = 0;
+          dirty = true;
+        } else if (inBtn(otaBtn, x, y) && !st.otaBusy) {
+          hit = "OTA";
+        } else if (inBtn(wifiBtn, x, y) && !st.otaBusy) {
+          if (now < resetArmedUntil) {
+            hit = "WIFI_RESET";
+          } else {
+            resetArmedUntil = now + 3000;
+            dirty = true;
+          }
+        }
+      } else {
+        if (inBtn(setupOpen, x, y)) {
+          setupPage = true;
+          resetArmedUntil = 0;
+          dirty = true;
+        } else {
+          for (int i = 0; i < 3; i++) {
+            if (inBtn(modeBtns[i], x, y)) {
+              hit = modeBtns[i].token;
+              strncpy(st.req, hit, sizeof(st.req) - 1);
+              dirty = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  touching = down;
+  if (resetArmedUntil && millis() >= resetArmedUntil) {
+    resetArmedUntil = 0;
+    dirty = true;
+  }
+  return hit;
+}
+
+void uiDraw() {
+  if (!dirty || !haveStatus) return;
+  dirty = false;
+
+  gfx->fillScreen(COL_BG);
+  if (setupPage) drawSetup();
+  else drawHome();
   gfx->flush();
 }
