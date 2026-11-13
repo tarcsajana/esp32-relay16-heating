@@ -27,15 +27,25 @@ static WebServer server(80);
 static bool servicesStarted = false;
 static bool otaBusy = false;
 
+// The ESP32 web server drops the client as soon as the handler returns.
+// Chrome reports that as ERR_EMPTY_RESPONSE unless the bytes are flushed
+// and the socket stays open long enough for them to leave.
+static void finishHttp(WebServer &web) {
+  web.client().flush();
+  uint32_t start = millis();
+  while (web.client().connected() && millis() - start < 200) delay(1);
+}
+
 static bool requireAuth() {
   if (server.authenticate(AUTH_USER, AUTH_PASS)) return true;
   server.requestAuthentication(BASIC_AUTH, HOSTNAME);
+  finishHttp(server);
   return false;
 }
 
 static void handleRoot() {
   if (!requireAuth()) return;
-  char page[1600];
+  static char page[2048];
   snprintf(page, sizeof(page),
            "<!DOCTYPE html><meta name=viewport content=\"width=device-width,initial-scale=1\">"
            "<title>Heating</title>"
@@ -56,11 +66,13 @@ static void handleRoot() {
            "<button>Forget Wi-Fi</button></form>",
            heatingStatus());
   server.send(200, "text/html", page);
+  finishHttp(server);
 }
 
 static void handleForget() {
   if (!requireAuth()) return;
   server.send(200, "text/plain", "Wi-Fi cleared. Restarting into setup.");
+  finishHttp(server);
   delay(300);
   wm.resetSettings();
   ESP.restart();
@@ -71,6 +83,7 @@ static void handleUpdateDone() {
   bool ok = !Update.hasError();
   server.sendHeader("Connection", "close");
   server.send(ok ? 200 : 500, "text/plain", ok ? "OK, restarting" : "Update failed");
+  finishHttp(server);
   if (ok) {
     delay(400);
     ESP.restart();
@@ -142,12 +155,12 @@ static void handleOtaGithub(WebServer &web) {
     web.send(503, "text/html",
              "<p>The board is not on a Wi-Fi network with internet, so it cannot download the release.</p>"
              "<p><a href='/update'>Upload a firmware.bin file instead</a></p>");
+    finishHttp(web);
     return;
   }
   web.send(200, "text/html",
            "<p>Installing the latest firmware from GitHub. Keep power on. The board reboots when it finishes.</p>");
-  web.client().flush();
-  delay(100);
+  finishHttp(web);
   otaBusy = true;
   String err;
   Serial.println(F("GitHub OTA: downloading latest firmware.bin"));
