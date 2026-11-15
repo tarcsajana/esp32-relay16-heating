@@ -142,21 +142,20 @@ static void drawHome() {
 
   gfx->fillRoundRect(16, 48, 288, 150, 16, COL_CARD);
   const char *tempLabel = st.temp[0] ? st.temp : "--";
-  centerText(tempLabel, 78, 6, COL_TEXT);
+  centerText(tempLabel, 68, 6, COL_TEXT);
   if (strcmp(tempLabel, "--") != 0) {
     gfx->setTextSize(3);
     gfx->setTextColor(COL_MUTED);
     int16_t bx, by;
     uint16_t bw, bh;
     gfx->getTextBounds(tempLabel, 0, 0, &bx, &by, &bw, &bh);
-    gfx->setCursor((W + (int)bw) / 2 + 4, 92);
+    gfx->setCursor((W + (int)bw) / 2 + 4, 82);
     gfx->print("C");
   }
-  centerText("fireplace pipe", 148, 2, COL_MUTED);
-  char extras[32];
-  snprintf(extras, sizeof(extras), "a %s   b %s",
+  char extras[40];
+  snprintf(extras, sizeof(extras), "T1 %s    T2 %s",
            st.a[0] ? st.a : "--", st.b[0] ? st.b : "--");
-  centerText(extras, 172, 2, COL_MUTED);
+  centerText(extras, 132, 2, COL_MUTED);
 
   uint16_t modeCol = COL_MUTED;
   if (strcmp(st.mode, "FIRE_DUMP") == 0) modeCol = COL_DUMP;
