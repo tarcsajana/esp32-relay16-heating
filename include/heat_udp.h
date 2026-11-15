@@ -9,7 +9,7 @@
 // Status (relay -> remote), one ASCII line:
 //   HEAT T=45.2 mode=FIREPLACE req=AUTO t1=1 t2=0 valve=FP heat=0 p1=1 p2=0
 //   T=-- when the DS18B20 is missing.
-//   mode = live output (FIRE_DUMP | ELECTRIC | FIREPLACE)
+//   mode = live valve (ELECTRIC | FIREPLACE)
 //   req  = last remote request (AUTO | ELECTRIC | FIREPLACE)
 //
 // Commands (remote -> relay):
@@ -18,8 +18,8 @@
 //   MODE FIREPLACE
 //   HEAT?            ask for a status reply now
 //
-// AUTO is the built-in logic (fireplace default, electric backup).
-// ELECTRIC / FIREPLACE force the circuit; fireDump still overrides both.
+// AUTO selects the valve from the pipe temperature.
+// ELECTRIC forces the electric valve. FIREPLACE forces the fireplace valve.
 
 static const uint16_t HEAT_UDP_RELAY_PORT  = 4210;
 static const uint16_t HEAT_UDP_REMOTE_PORT = 4211;

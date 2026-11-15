@@ -157,7 +157,7 @@ Do not use the `relay` environment for this. `relay` is the serial bridge upload
 
 ## Touch remote (JC3248W535C)
 
-The 3.5" ESP32-S3 panel is a UDP remote for the same heating box. GUI is Arduino_GFX (LVGL is unreliable on the AXS15231B QSPI panel). Three buttons: **Auto**, **Electric**, **Fireplace**. Auto is the built-in logic. A dump at ≥ 75 °C still forces fireplace regardless of the button.
+The 3.5" ESP32-S3 panel is a UDP remote for the same heating box. GUI is Arduino_GFX (LVGL is unreliable on the AXS15231B QSPI panel). Three buttons: **Auto**, **Electric**, **Fireplace**. Auto follows the pipe: electric valve under 35 °C, fireplace valve from 35 °C up. The heater runs only on the electric valve, and only when a thermostat is calling. Fireplace ignores the thermostats.
 
 Plug USB-C into the **panel**, not the SuperMini:
 

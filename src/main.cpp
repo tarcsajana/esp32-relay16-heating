@@ -27,7 +27,6 @@ static const int RELAY_PUMP2   = 1;
 static const int RELAY_HEATER  = 2;
 static const int RELAY_VALVE   = 3;  // ON = fireplace circuit, OFF = electric
 
-static const float T_FIRE_ON  = 75.0;
 static const float T_PUMP_OFF = 55.0;
 static const float T_FIRE_OFF = 35.0;
 
@@ -146,9 +145,6 @@ static void formatTemp(char *dst, size_t n, bool present, float t) {
   else snprintf(dst, n, "--");
 }
 
-// Fireplace is the default circuit. Electric is backup only.
-bool fireDump = false;   // T>=75 on, T<=35 off — fireplace session
-bool dumpPumps = false;  // T>=75 on, T<=55 off — both pumps forced
 uint16_t relayMask = 0;
 
 void writeRelays(uint16_t mask) {
@@ -231,51 +227,21 @@ static void controlStep() {
   bool tstat1 = (digitalRead(PIN_TSTAT1) == LOW);
   bool tstat2 = (digitalRead(PIN_TSTAT2) == LOW);
   bool call = tstat1 || tstat2;
-
-  if (!sensorOk) {
-    fireDump = false;
-    dumpPumps = false;
-  } else {
-    if (t >= T_FIRE_ON) {
-      fireDump = true;
-      dumpPumps = true;
-    }
-    if (t <= T_PUMP_OFF) dumpPumps = false;   // 55°C: pumps rest, session stays
-    if (t <= T_FIRE_OFF) fireDump = false;    // 35°C: fireplace session ends
-  }
-
-  // AUTO follows the pipe directly. No 75°C latch and no thermostat on the valve.
-  // Under 35: electric, heater on. 35–55: fireplace, both pumps off.
-  // Above 55: fireplace, both pumps on, heater off.
   HeatRequest req = heatRequest();
-  bool forceElectric = (req == HEAT_REQ_ELECTRIC);
 
   bool valveFireplace;
   bool heater;
   bool pump1;
   bool pump2;
 
-  if (req == HEAT_REQ_AUTO && sensorOk && t < T_FIRE_OFF) {
-    valveFireplace = false;
-    heater = true;
-    pump1 = tstat1;
-    pump2 = tstat2;
-  } else if (req == HEAT_REQ_AUTO && sensorOk && t <= T_PUMP_OFF) {
-    valveFireplace = true;
-    heater = false;
-    pump1 = false;
-    pump2 = false;
-  } else if (req == HEAT_REQ_AUTO && sensorOk) {
-    valveFireplace = true;
-    heater = false;
-    pump1 = true;
-    pump2 = true;
-  } else if (fireDump) {
-    valveFireplace = true;
-    heater = false;
-    pump1 = dumpPumps;
-    pump2 = dumpPumps;
-  } else if (forceElectric || (req == HEAT_REQ_AUTO && call)) {
+  // Fireplace valve: heater stays off and thermostats are ignored.
+  // Above 55 °C both pumps on, otherwise both off.
+  bool fireplacePumps = sensorOk && t > T_PUMP_OFF;
+  // Electric valve: heater and each pump follow their thermostat. No temp control.
+  bool electricValve = (req == HEAT_REQ_ELECTRIC) ||
+      (req == HEAT_REQ_AUTO && (!sensorOk || t < T_FIRE_OFF));
+
+  if (electricValve) {
     valveFireplace = false;
     heater = call;
     pump1 = tstat1;
@@ -283,15 +249,13 @@ static void controlStep() {
   } else {
     valveFireplace = true;
     heater = false;
-    pump1 = tstat1;
-    pump2 = tstat2;
+    pump1 = fireplacePumps;
+    pump2 = fireplacePumps;
   }
 
   applyOutputs(valveFireplace, heater, pump1, pump2);
 
-  const char *modeName = (req == HEAT_REQ_AUTO)
-      ? (valveFireplace ? "FIREPLACE" : "ELECTRIC")
-      : (fireDump ? "FIRE_DUMP" : (!valveFireplace ? "ELECTRIC" : "FIREPLACE"));
+  const char *modeName = valveFireplace ? "FIREPLACE" : "ELECTRIC";
 
   char wifi[40];
   char temp[16];

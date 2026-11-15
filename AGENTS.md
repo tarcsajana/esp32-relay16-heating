@@ -6,21 +6,18 @@ Sister folder (USB-TTL bridge only): `../esp32c3-usb-ttl-bridge`. Never flash `e
 
 ## Control logic (source of truth)
 
-Fireplace is the **default**. The JC3248W535C remote can request AUTO / ELECTRIC / FIREPLACE over UDP. AUTO uses the pipe temperature directly (no 75 °C latch). `fireDump` still overrides a remote ELECTRIC or FIREPLACE request.
+The JC3248W535C remote requests AUTO / ELECTRIC / FIREPLACE over UDP. The heater can run only while the valve is electric, and then only when a thermostat is calling. Fireplace valve never runs the heater and ignores both thermostats.
 
-AUTO, pipe sensor only:
-
-| Pipe temp | Valve | Heater | Pumps |
+| Request | Valve | Heater | Pumps |
 |---|---|---|---|
-| < 35 °C | electric | ON, thermostat ignored | pump1 = TSTAT1, pump2 = TSTAT2 |
-| 35–55 °C | fireplace | off | both OFF |
-| > 55 °C | fireplace | off | both ON |
+| AUTO, pipe < 35 °C or no sensor | electric | thermostat call | pump1 = TSTAT1, pump2 = TSTAT2 |
+| AUTO, pipe ≥ 35 °C | fireplace | off | both ON only while pipe > 55 °C, else both OFF |
+| ELECTRIC | electric | thermostat call | pump1 = TSTAT1, pump2 = TSTAT2 |
+| FIREPLACE | fireplace | off | both ON only while pipe > 55 °C, else both OFF |
 
-At 35 °C the valve is still fireplace. At 55 °C both pumps are still off. No sensor: electric only when a thermostat is calling, heater follows that call.
+At 35 °C AUTO is still fireplace. At 55 °C both pumps are still off. T1 and T2 sensors do not affect this.
 
-Remote ELECTRIC / FIREPLACE, when not in AUTO: the 75/55/35 latches still apply. ≥ 75 °C sets `fireDump` and `dumpPumps`. ≤ 55 °C clears `dumpPumps`. ≤ 35 °C clears `fireDump`. During `fireDump`: valve fireplace, heater off, both pumps ON only while `dumpPumps`.
-
-Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR in the under-35 band. Remote mode is UDP only (`req=` on the status line).
+Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR while the valve is electric. Remote mode is UDP only (`req=` on the status line).
 
 ## Pins
 
@@ -53,6 +50,6 @@ Do not set `use_1200bps_touch` or pass `--before=no_reset` via `upload_flags` (P
 - `SCREEN.md` — panel SoC, QSPI/touch pins, flash, UDP. Read before editing `src/remote/`
 - `platformio.ini` — `env:relay` serial, `env:relay-ota` Wi-Fi, `env:remote` panel, `env:remote-ota` panel Wi-Fi
 
-Status line: `T=  a=  b=  mode=FIRE_DUMP|ELECTRIC|FIREPLACE  req=AUTO|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
+Status line: `T=  a=  b=  mode=ELECTRIC|FIREPLACE  req=AUTO|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
 
 UDP: relay `:4210` ← `MODE AUTO|ELECTRIC|FIREPLACE` / `HEAT?`. Relay → remote `:4211` `HEAT T= a= b= mode= req= ...`. Remote shows red `No connection` if no packet for 30 s. `T` is the fireplace pipe. `a` and `b` are the other two sensors on GPIO23.

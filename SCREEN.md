@@ -85,4 +85,4 @@ On-screen **SETUP**: IP, SSID, `heat-remote.local`, GitHub OTA (`remote.bin` fro
 | Remote listen | **4211** — `HEAT T=45.2 mode=FIREPLACE req=AUTO t1=0 t2=0 valve=FP heat=0 p1=0 p2=0` |
 | Stale | no packet for **30 s** → red **No connection** |
 
-`T=--` if the DS18B20 is missing. `mode=` is live output; `req=` is the last button. `fireDump` still overrides ELECTRIC. Details: `include/heat_udp.h`, `AGENTS.md`.
+`T=--` if the DS18B20 is missing. `mode=` is the live valve (`ELECTRIC` or `FIREPLACE`); `req=` is the last button. Details: `include/heat_udp.h`, `AGENTS.md`.
