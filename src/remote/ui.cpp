@@ -67,6 +67,16 @@ static void centerText(const char *s, int y, int size, uint16_t color) {
   gfx->print(s);
 }
 
+static void centerTextAt(const char *s, int cx, int y, int size, uint16_t color) {
+  gfx->setTextSize(size);
+  gfx->setTextColor(color);
+  int16_t x1, y1;
+  uint16_t tw, th;
+  gfx->getTextBounds(s, 0, 0, &x1, &y1, &tw, &th);
+  gfx->setCursor(cx - (int)tw / 2, y);
+  gfx->print(s);
+}
+
 static void labelAt(const char *s, int x, int y, int size, uint16_t color) {
   gfx->setTextSize(size);
   gfx->setTextColor(color);
@@ -141,21 +151,32 @@ static void drawHome() {
   gfx->print(conn);
 
   gfx->fillRoundRect(16, 48, 288, 150, 16, COL_CARD);
+  centerText("Fireplace pipe", 52, 2, COL_MUTED);
   const char *tempLabel = st.temp[0] ? st.temp : "--";
-  centerText(tempLabel, 68, 6, COL_TEXT);
+  centerText(tempLabel, 74, 6, COL_TEXT);
   if (strcmp(tempLabel, "--") != 0) {
-    gfx->setTextSize(3);
-    gfx->setTextColor(COL_MUTED);
     int16_t bx, by;
     uint16_t bw, bh;
+    gfx->setTextSize(6);
     gfx->getTextBounds(tempLabel, 0, 0, &bx, &by, &bw, &bh);
-    gfx->setCursor((W + (int)bw) / 2 + 4, 82);
+    int right = (W - (int)bw) / 2 + (int)bx + (int)bw;
+    gfx->setTextSize(3);
+    gfx->setTextColor(COL_MUTED);
+    gfx->setCursor(right + 22, 90);
     gfx->print("C");
   }
-  char extras[40];
-  snprintf(extras, sizeof(extras), "T1 %s    T2 %s",
-           st.a[0] ? st.a : "--", st.b[0] ? st.b : "--");
-  centerText(extras, 132, 2, COL_MUTED);
+  const char *aVal = st.a[0] ? st.a : "--";
+  const char *bVal = st.b[0] ? st.b : "--";
+  char pump1[16];
+  char pump2[16];
+  if (strcmp(aVal, "--") != 0) snprintf(pump1, sizeof(pump1), "%s C", aVal);
+  else snprintf(pump1, sizeof(pump1), "--");
+  if (strcmp(bVal, "--") != 0) snprintf(pump2, sizeof(pump2), "%s C", bVal);
+  else snprintf(pump2, sizeof(pump2), "--");
+  centerTextAt(pump1, 96, 130, 3, COL_TEXT);
+  centerTextAt("Pump1 pipe", 96, 158, 1, COL_MUTED);
+  centerTextAt(pump2, 224, 130, 3, COL_TEXT);
+  centerTextAt("Pump2 pipe", 224, 158, 1, COL_MUTED);
 
   uint16_t modeCol = COL_MUTED;
   if (strcmp(st.mode, "FIRE_DUMP") == 0) modeCol = COL_DUMP;
