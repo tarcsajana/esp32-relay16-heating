@@ -8,12 +8,9 @@ This folder is the LCTech ESP32-WROOM-32E 16-ch relay heating firmware. Read AGE
 Relays are two on-board 74HC595s (GPIO14/13/12/5/4). Never drive pumps/heater/valve from raw ESP32 GPIOs.
 
 Control logic lives in `controlStep()`:
-- Fireplace is default (AUTO). Remote UDP can request AUTO / ELECTRIC / FIREPLACE; fireDump still overrides ELECTRIC.
-- Electric in AUTO only when T ≤ 35 °C (or no sensor) AND a thermostat is calling.
-- fireDump latches at ≥ 75 °C and clears at ≤ 35 °C. dumpPumps latches at ≥ 75 °C and clears at ≤ 55 °C.
-- During fireDump: valve fireplace, heater off; both pumps ON if dumpPumps else both OFF (55–35 °C band ignores thermostats).
-- Otherwise pump1 = TSTAT1 (GPIO16), pump2 = TSTAT2 (GPIO17).
-- Up to two more DS18B20s share GPIO23. Only the learned pipe address runs the latches. `a=` and `b=` are report-only.
+- AUTO uses the pipe directly. Under 35 °C: valve electric, heater ON even with no thermostat, each pump follows its own thermostat. 35–55 °C: fireplace, heater off, both pumps off. Above 55 °C: fireplace, heater off, both pumps on.
+- Remote ELECTRIC / FIREPLACE still use the 75/55/35 latches. fireDump overrides those two requests.
+- Up to two more DS18B20s share GPIO23. Only the learned pipe address runs this logic. `a=` and `b=` are report-only.
 - JC3248W535C remote is `env:remote` (USB-C on the panel). Do not flash it through the C3 bridge. Pins and GUI constraints: `SCREEN.md`.
 
 Serial upload is through the C3 SuperMini at 115200 with no_reset. Do not flash C3 firmware here. Full flash/OTA notes: README.md.

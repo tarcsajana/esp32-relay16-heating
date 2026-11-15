@@ -6,25 +6,21 @@ Sister folder (USB-TTL bridge only): `../esp32c3-usb-ttl-bridge`. Never flash `e
 
 ## Control logic (source of truth)
 
-Fireplace is the **default**. The JC3248W535C remote can request AUTO / ELECTRIC / FIREPLACE over UDP; AUTO is the same automatic logic as before. Electric is backup only in AUTO. `fireDump` always overrides a remote ELECTRIC request.
+Fireplace is the **default**. The JC3248W535C remote can request AUTO / ELECTRIC / FIREPLACE over UDP. AUTO uses the pipe temperature directly (no 75 °C latch). `fireDump` still overrides a remote ELECTRIC or FIREPLACE request.
 
-Thresholds on the DS18B20 at the fireplace pipe:
+AUTO, pipe sensor only:
 
-| Temp | Latch |
-|---|---|
-| ≥ 75 °C | `fireDump = true`, `dumpPumps = true` |
-| ≤ 55 °C | `dumpPumps = false` (session stays) |
-| ≤ 35 °C | `fireDump = false` |
+| Pipe temp | Valve | Heater | Pumps |
+|---|---|---|---|
+| < 35 °C | electric | ON, thermostat ignored | pump1 = TSTAT1, pump2 = TSTAT2 |
+| 35–55 °C | fireplace | off | both OFF |
+| > 55 °C | fireplace | off | both ON |
 
-Outputs:
+At 35 °C the valve is still fireplace. At 55 °C both pumps are still off. No sensor: electric only when a thermostat is calling, heater follows that call.
 
-- **fireDump** (fireplace session, 75 °C → 35 °C): valve = fireplace, heater OFF. Pumps: both ON if `dumpPumps`, else **both OFF** (the 55–35 °C band). Ignore thermostats for pumps.
-- **Electric**: AUTO when a thermostat is calling **and** (`T ≤ 35 °C` or sensor missing), or remote ELECTRIC (heater still follows `call`). Valve = electric. Pump1 = TSTAT1, pump2 = TSTAT2.
-- **Else** (AUTO default or remote FIREPLACE): valve = fireplace, heater OFF. Pump1 = TSTAT1, pump2 = TSTAT2.
+Remote ELECTRIC / FIREPLACE, when not in AUTO: the 75/55/35 latches still apply. ≥ 75 °C sets `fireDump` and `dumpPumps`. ≤ 55 °C clears `dumpPumps`. ≤ 35 °C clears `fireDump`. During `fireDump`: valve fireplace, heater off, both pumps ON only while `dumpPumps`.
 
-`call` = TSTAT1 OR TSTAT2 (heater enable only). Pumps are per-zone except during dump.
-
-Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR in normal operation. Remote mode is UDP only (`req=` on the status line); dump still wins.
+Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR in the under-35 band. Remote mode is UDP only (`req=` on the status line).
 
 ## Pins
 

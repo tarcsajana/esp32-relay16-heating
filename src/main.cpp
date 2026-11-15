@@ -244,9 +244,9 @@ static void controlStep() {
     if (t <= T_FIRE_OFF) fireDump = false;    // 35°C: fireplace session ends
   }
 
-  // AUTO: electric only when fireplace water is cold AND a room asks for heat.
-  // ELECTRIC / FIREPLACE: remote force. fireDump still wins.
-  bool autoElectric = call && (!sensorOk || t <= T_FIRE_OFF);
+  // AUTO follows the pipe directly. No 75°C latch and no thermostat on the valve.
+  // Under 35: electric, heater on. 35–55: fireplace, both pumps off.
+  // Above 55: fireplace, both pumps on, heater off.
   HeatRequest req = heatRequest();
   bool forceElectric = (req == HEAT_REQ_ELECTRIC);
 
@@ -255,12 +255,27 @@ static void controlStep() {
   bool pump1;
   bool pump2;
 
-  if (fireDump) {
+  if (req == HEAT_REQ_AUTO && sensorOk && t < T_FIRE_OFF) {
+    valveFireplace = false;
+    heater = true;
+    pump1 = tstat1;
+    pump2 = tstat2;
+  } else if (req == HEAT_REQ_AUTO && sensorOk && t <= T_PUMP_OFF) {
+    valveFireplace = true;
+    heater = false;
+    pump1 = false;
+    pump2 = false;
+  } else if (req == HEAT_REQ_AUTO && sensorOk) {
+    valveFireplace = true;
+    heater = false;
+    pump1 = true;
+    pump2 = true;
+  } else if (fireDump) {
     valveFireplace = true;
     heater = false;
     pump1 = dumpPumps;
     pump2 = dumpPumps;
-  } else if (forceElectric || (req == HEAT_REQ_AUTO && autoElectric)) {
+  } else if (forceElectric || (req == HEAT_REQ_AUTO && call)) {
     valveFireplace = false;
     heater = call;
     pump1 = tstat1;
@@ -274,7 +289,9 @@ static void controlStep() {
 
   applyOutputs(valveFireplace, heater, pump1, pump2);
 
-  const char *modeName = fireDump ? "FIRE_DUMP" : (!valveFireplace ? "ELECTRIC" : "FIREPLACE");
+  const char *modeName = (req == HEAT_REQ_AUTO)
+      ? (valveFireplace ? "FIREPLACE" : "ELECTRIC")
+      : (fireDump ? "FIRE_DUMP" : (!valveFireplace ? "ELECTRIC" : "FIREPLACE"));
 
   char wifi[40];
   char temp[16];
