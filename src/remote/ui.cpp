@@ -153,6 +153,10 @@ static void drawHome() {
     gfx->print("C");
   }
   centerText("fireplace pipe", 148, 2, COL_MUTED);
+  char extras[32];
+  snprintf(extras, sizeof(extras), "a %s   b %s",
+           st.a[0] ? st.a : "--", st.b[0] ? st.b : "--");
+  centerText(extras, 172, 2, COL_MUTED);
 
   uint16_t modeCol = COL_MUTED;
   if (strcmp(st.mode, "FIRE_DUMP") == 0) modeCol = COL_DUMP;
@@ -239,6 +243,8 @@ void uiBegin() {
 
   memset(&st, 0, sizeof(st));
   strncpy(st.temp, "--", sizeof(st.temp));
+  strncpy(st.a, "--", sizeof(st.a));
+  strncpy(st.b, "--", sizeof(st.b));
   strncpy(st.mode, "--", sizeof(st.mode));
   strncpy(st.req, "AUTO", sizeof(st.req));
   strncpy(st.valve, "--", sizeof(st.valve));

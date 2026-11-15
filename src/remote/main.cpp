@@ -58,6 +58,8 @@ static int kvInt(const char *s, const char *key) {
 static void parseStatus(const char *line) {
   if (strncmp(line, "HEAT ", 5) != 0) return;
   kv(line, "T=", status.temp, sizeof(status.temp));
+  if (!kv(line, " a=", status.a, sizeof(status.a))) strncpy(status.a, "--", sizeof(status.a));
+  if (!kv(line, " b=", status.b, sizeof(status.b))) strncpy(status.b, "--", sizeof(status.b));
   kv(line, "mode=", status.mode, sizeof(status.mode));
   kv(line, "req=", status.req, sizeof(status.req));
   kv(line, "valve=", status.valve, sizeof(status.valve));
@@ -360,6 +362,8 @@ void setup() {
 
   memset(&status, 0, sizeof(status));
   strncpy(status.temp, "--", sizeof(status.temp));
+  strncpy(status.a, "--", sizeof(status.a));
+  strncpy(status.b, "--", sizeof(status.b));
   strncpy(status.mode, "--", sizeof(status.mode));
   strncpy(status.req, "AUTO", sizeof(status.req));
   strncpy(status.valve, "--", sizeof(status.valve));

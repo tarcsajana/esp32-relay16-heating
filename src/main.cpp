@@ -2,8 +2,10 @@
 // Relays are driven by two 74HC595s, not raw GPIOs.
 
 #include <Arduino.h>
-#include <OneWire.h>
 #include <DallasTemperature.h>
+#include <OneWire.h>
+#include <Preferences.h>
+#include <cstring>
 #include "net.h"
 #include "udp_heat.h"
 
@@ -33,6 +35,116 @@ static const bool BOOT_CLICK_TEST = true;
 
 OneWire oneWire(PIN_ONEWIRE);
 DallasTemperature sensors(&oneWire);
+
+// Pipe sensor runs the latches. The other two on the same bus are report-only.
+static const int SENSOR_MAX = 3;
+static DeviceAddress pipeAddr;
+static bool pipeKnown = false;
+static DeviceAddress extraAddr[2];
+static int extraCount = 0;
+static int lastCount = -1;
+
+static bool addrOk(const uint8_t *a) {
+  if (a[0] != 0x28) return false;
+  for (int i = 0; i < 8; i++) {
+    if (a[i] != 0) return true;
+  }
+  return false;
+}
+
+static void printAddr(const uint8_t *a) {
+  for (int i = 0; i < 8; i++) Serial.printf("%02X", a[i]);
+}
+
+static void loadPipe() {
+  Preferences prefs;
+  prefs.begin("ds", true);
+  size_t n = prefs.getBytes("pipe", pipeAddr, sizeof(pipeAddr));
+  prefs.end();
+  pipeKnown = (n == sizeof(pipeAddr) && addrOk(pipeAddr));
+}
+
+static void savePipe(const uint8_t *a) {
+  memcpy(pipeAddr, a, sizeof(pipeAddr));
+  pipeKnown = true;
+  Preferences prefs;
+  prefs.begin("ds", false);
+  prefs.putBytes("pipe", pipeAddr, sizeof(pipeAddr));
+  prefs.end();
+  Serial.print(F("Pipe sensor "));
+  printAddr(pipeAddr);
+  Serial.println();
+}
+
+static void assignSensors() {
+  extraCount = 0;
+  int n = sensors.getDeviceCount();
+  if (n > SENSOR_MAX) n = SENSOR_MAX;
+
+  DeviceAddress found[SENSOR_MAX];
+  int count = 0;
+  for (int i = 0; i < n; i++) {
+    if (sensors.getAddress(found[count], i)) count++;
+  }
+  for (int i = 0; i < count; i++) {
+    for (int j = i + 1; j < count; j++) {
+      if (memcmp(found[j], found[i], 8) < 0) {
+        DeviceAddress tmp;
+        memcpy(tmp, found[i], 8);
+        memcpy(found[i], found[j], 8);
+        memcpy(found[j], tmp, 8);
+      }
+    }
+  }
+
+  bool pipeOnBus = false;
+  if (pipeKnown) {
+    for (int i = 0; i < count; i++) {
+      if (memcmp(found[i], pipeAddr, 8) == 0) pipeOnBus = true;
+    }
+  }
+  // Learn the pipe only while it is the only chip, and only once.
+  if (!pipeKnown && count == 1) {
+    savePipe(found[0]);
+    pipeOnBus = true;
+  }
+
+  for (int i = 0; i < count && extraCount < 2; i++) {
+    if (pipeOnBus && memcmp(found[i], pipeAddr, 8) == 0) continue;
+    memcpy(extraAddr[extraCount], found[i], 8);
+    extraCount++;
+  }
+
+  Serial.printf("DS18B20 count=%d pipe=%d extras=%d\n", count, pipeOnBus ? 1 : 0, extraCount);
+  if (!pipeOnBus && count > 1) {
+    Serial.println(F("Pipe not learned. Power up once with only the fireplace sensor connected."));
+    for (int i = 0; i < count; i++) {
+      Serial.print(F("  "));
+      printAddr(found[i]);
+      Serial.println();
+    }
+  }
+}
+
+static void refreshBus(bool force) {
+  if (force || sensors.getDeviceCount() == 0) {
+    sensors.begin();
+    pinMode(PIN_ONEWIRE, INPUT_PULLUP);
+    if (sensors.getDeviceCount()) sensors.setResolution(12);
+  }
+  int n = sensors.getDeviceCount();
+  if (n != lastCount) {
+    assignSensors();
+    lastCount = n;
+  }
+}
+
+static bool tempOk(float t) { return t > -50.0f && t < 125.0f; }
+
+static void formatTemp(char *dst, size_t n, bool present, float t) {
+  if (present && tempOk(t)) snprintf(dst, n, "%.1f", t);
+  else snprintf(dst, n, "--");
+}
 
 // Fireplace is the default circuit. Electric is backup only.
 bool fireDump = false;   // T>=75 on, T<=35 off — fireplace session
@@ -95,20 +207,26 @@ void setup() {
 
   if (BOOT_CLICK_TEST) bootClickTest();
 
-  sensors.begin();
-  sensors.setResolution(12);
+  loadPipe();
   sensors.setWaitForConversion(false);
+  refreshBus(true);
 
   netSetup();
 }
 
-static char statusLine[180] = "starting";
+static char statusLine[240] = "starting";
 
 const char *heatingStatus() { return statusLine; }
 
 static void controlStep() {
-  float t = sensors.getTempCByIndex(0);
-  bool sensorOk = (t > -50.0f && t < 125.0f);
+  float t = pipeKnown ? sensors.getTempC(pipeAddr) : DEVICE_DISCONNECTED_C;
+  bool sensorOk = tempOk(t);
+  float ta = extraCount > 0 ? sensors.getTempC(extraAddr[0]) : DEVICE_DISCONNECTED_C;
+  float tb = extraCount > 1 ? sensors.getTempC(extraAddr[1]) : DEVICE_DISCONNECTED_C;
+  char aTxt[8];
+  char bTxt[8];
+  formatTemp(aTxt, sizeof(aTxt), extraCount > 0, ta);
+  formatTemp(bTxt, sizeof(bTxt), extraCount > 1, tb);
 
   bool tstat1 = (digitalRead(PIN_TSTAT1) == LOW);
   bool tstat2 = (digitalRead(PIN_TSTAT2) == LOW);
@@ -160,25 +278,26 @@ static void controlStep() {
 
   char wifi[40];
   char temp[16];
-  char udpLine[180];
+  char udpLine[240];
   netStatus(wifi, sizeof(wifi));
   if (sensorOk) snprintf(temp, sizeof(temp), "%.1f", t);
   else snprintf(temp, sizeof(temp), "--");
-  snprintf(statusLine, sizeof(statusLine),
-           "T=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
-           sensorOk ? temp : "NO_SENSOR",
-           modeName,
-           heatRequestName(),
-           tstat1 ? 1 : 0,
-           tstat2 ? 1 : 0,
-           valveFireplace ? "FP" : "EL",
-           heater ? 1 : 0,
-           pump1 ? 1 : 0,
-           pump2 ? 1 : 0,
-           wifi);
+  if (sensorOk) {
+    snprintf(statusLine, sizeof(statusLine),
+             "T=%s  a=%s  b=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
+             temp, aTxt, bTxt, modeName, heatRequestName(),
+             tstat1 ? 1 : 0, tstat2 ? 1 : 0,
+             valveFireplace ? "FP" : "EL", heater ? 1 : 0, pump1 ? 1 : 0, pump2 ? 1 : 0, wifi);
+  } else {
+    snprintf(statusLine, sizeof(statusLine),
+             "T=NO_SENSOR ds=%u  a=%s  b=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
+             sensors.getDeviceCount(), aTxt, bTxt, modeName, heatRequestName(),
+             tstat1 ? 1 : 0, tstat2 ? 1 : 0,
+             valveFireplace ? "FP" : "EL", heater ? 1 : 0, pump1 ? 1 : 0, pump2 ? 1 : 0, wifi);
+  }
   snprintf(udpLine, sizeof(udpLine),
-           "HEAT T=%s mode=%s req=%s t1=%d t2=%d valve=%s heat=%d p1=%d p2=%d",
-           temp,
+           "HEAT T=%s a=%s b=%s mode=%s req=%s t1=%d t2=%d valve=%s heat=%d p1=%d p2=%d",
+           temp, aTxt, bTxt,
            modeName,
            heatRequestName(),
            tstat1 ? 1 : 0,
@@ -201,6 +320,9 @@ void loop() {
   uint32_t now = millis();
 
   if (!waiting && now - lastReq >= 1000) {
+    static uint32_t lastScan = 0;
+    refreshBus(now - lastScan >= 10000);
+    if (now - lastScan >= 10000) lastScan = now;
     sensors.requestTemperatures();
     lastReq = now;
     waiting = true;

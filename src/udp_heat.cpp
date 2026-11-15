@@ -13,7 +13,7 @@ static bool udpReady = false;
 static HeatRequest req = HEAT_REQ_AUTO;
 static IPAddress lastRemote;
 static bool haveRemote = false;
-static char udpLine[180] =
+static char udpLine[240] =
     "HEAT T=-- mode=FIREPLACE req=AUTO t1=0 t2=0 valve=FP heat=0 p1=0 p2=0";
 
 static bool sameToken(const char *s, const char *want) {

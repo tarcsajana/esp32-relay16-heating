@@ -10,6 +10,8 @@ struct RemoteStatus {
   bool udpFresh;
   uint32_t lastUdpMs;
   char temp[16];
+  char a[8];
+  char b[8];
   char mode[16];
   char req[16];
   char valve[8];

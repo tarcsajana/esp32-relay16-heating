@@ -32,7 +32,7 @@ Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR
 |---|---|
 | 595 SER / SRCLK / RCLK | GPIO14 / 13 / 12 |
 | 595 OE (active LOW) / SRCLR (keep HIGH) | GPIO5 / 4 |
-| DS18B20 DQ | GPIO23 (4.7 kΩ to 3.3 V) |
+| DS18B20 DQ | GPIO23 (4.7 kΩ to 3.3 V). Up to 3 chips on this one bus. The pipe address is learned when it is the only chip connected, then kept. `a=` and `b=` are the other two and do not run the latches. |
 | TSTAT1 / TSTAT2 | GPIO16 / GPIO17, dry contact to GND, INPUT_PULLUP |
 | Relay 1 / 2 / 3 / 4 | Pump1 / Pump2 / electric heater / valve (ON = fireplace) |
 
@@ -57,6 +57,6 @@ Do not set `use_1200bps_touch` or pass `--before=no_reset` via `upload_flags` (P
 - `SCREEN.md` — panel SoC, QSPI/touch pins, flash, UDP. Read before editing `src/remote/`
 - `platformio.ini` — `env:relay` serial, `env:relay-ota` Wi-Fi, `env:remote` panel, `env:remote-ota` panel Wi-Fi
 
-Status line: `T=  mode=FIRE_DUMP|ELECTRIC|FIREPLACE  req=AUTO|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
+Status line: `T=  a=  b=  mode=FIRE_DUMP|ELECTRIC|FIREPLACE  req=AUTO|ELECTRIC|FIREPLACE  t1= t2=  valve=FP|EL  heat=  p1=  p2=  wifi=`
 
-UDP: relay `:4210` ← `MODE AUTO|ELECTRIC|FIREPLACE` / `HEAT?`. Relay → remote `:4211` `HEAT T= mode= req= ...`. Remote shows red `No connection` if no packet for 30 s.
+UDP: relay `:4210` ← `MODE AUTO|ELECTRIC|FIREPLACE` / `HEAT?`. Relay → remote `:4211` `HEAT T= a= b= mode= req= ...`. Remote shows red `No connection` if no packet for 30 s. `T` is the fireplace pipe. `a` and `b` are the other two sensors on GPIO23.
