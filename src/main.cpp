@@ -27,8 +27,9 @@ static const int RELAY_PUMP2   = 1;
 static const int RELAY_HEATER  = 2;
 static const int RELAY_VALVE   = 3;  // ON = fireplace circuit, OFF = electric
 
-static const float T_PUMP_OFF = 55.0;
-static const float T_FIRE_OFF = 35.0;
+static const float T_PUMP_ON  = 75.0;  // rising: start both fireplace pumps
+static const float T_PUMP_OFF = 55.0;  // falling: stop both fireplace pumps
+static const float T_FIRE_OFF = 35.0;  // AUTO: electric below this
 
 static const bool BOOT_CLICK_TEST = true;
 
@@ -234,9 +235,13 @@ static void controlStep() {
   bool pump1;
   bool pump2;
 
-  // Fireplace valve: heater stays off and thermostats are ignored.
-  // Above 55 °C both pumps on, otherwise both off.
-  bool fireplacePumps = sensorOk && t > T_PUMP_OFF;
+  // Fireplace pumps: ON at ≥ 75 °C (rising), OFF at ≤ 55 °C (falling).
+  // Between 55 and 75 keep the last state so a warming fire is not cooled at 55.
+  static bool dumpPumps = false;
+  if (!sensorOk) dumpPumps = false;
+  else if (t >= T_PUMP_ON) dumpPumps = true;
+  else if (t <= T_PUMP_OFF) dumpPumps = false;
+
   // Electric valve: heater and each pump follow their thermostat. No temp control.
   bool electricValve = (req == HEAT_REQ_ELECTRIC) ||
       (req == HEAT_REQ_AUTO && (!sensorOk || t < T_FIRE_OFF));
@@ -249,8 +254,8 @@ static void controlStep() {
   } else {
     valveFireplace = true;
     heater = false;
-    pump1 = fireplacePumps;
-    pump2 = fireplacePumps;
+    pump1 = dumpPumps;
+    pump2 = dumpPumps;
   }
 
   applyOutputs(valveFireplace, heater, pump1, pump2);

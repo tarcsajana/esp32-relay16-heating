@@ -11,11 +11,11 @@ The JC3248W535C remote requests AUTO / ELECTRIC / FIREPLACE over UDP. The heater
 | Request | Valve | Heater | Pumps |
 |---|---|---|---|
 | AUTO, pipe < 35 °C or no sensor | electric | thermostat call | pump1 = TSTAT1, pump2 = TSTAT2 |
-| AUTO, pipe ≥ 35 °C | fireplace | off | both ON only while pipe > 55 °C, else both OFF |
+| AUTO, pipe ≥ 35 °C | fireplace | off | both ON from ≥ 75 °C rising until ≤ 55 °C falling |
 | ELECTRIC | electric | thermostat call | pump1 = TSTAT1, pump2 = TSTAT2 |
-| FIREPLACE | fireplace | off | both ON only while pipe > 55 °C, else both OFF |
+| FIREPLACE | fireplace | off | both ON from ≥ 75 °C rising until ≤ 55 °C falling |
 
-At 35 °C AUTO is still fireplace. At 55 °C both pumps are still off. T1 and T2 sensors do not affect this.
+Fireplace pumps are a latch, not a 55 °C threshold. Rising through 55 °C keeps them off so the fire is not cooled. They start at 75 °C, stay on while cooling through the 75–55 band, then stop at 55 °C until 75 °C again. At 35 °C AUTO is still fireplace. T1 and T2 sensors do not affect this.
 
 Keep this in `controlStep()` in `src/main.cpp`. Do not gang both pumps to one OR while the valve is electric. Remote mode is UDP only (`req=` on the status line).
 
