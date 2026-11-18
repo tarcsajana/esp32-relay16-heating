@@ -1,5 +1,5 @@
 ---
-description: Fireplace/electric heating controller — pins, 74HC595, 35/55/75 logic
+description: Fireplace/electric heating controller — pins, 74HC595, 35/55/65 limits
 alwaysApply: true
 ---
 
@@ -9,9 +9,10 @@ Relays are two on-board 74HC595s (GPIO14/13/12/5/4). Never drive pumps/heater/va
 
 Control logic lives in `controlStep()`:
 - Heater runs only on the electric valve, and only when a thermostat is calling.
-- AUTO: pipe < 35 °C (or no sensor) selects electric. At or above 35 °C the valve is fireplace.
+- AUTO: pipe below the electric limit (default 35 °C, or no sensor) selects electric. At or above it the valve is fireplace.
 - ELECTRIC: valve stays electric. Heater and each pump follow the thermostats.
-- FIREPLACE, and AUTO while the valve is fireplace: heater off, thermostats ignored. Both pumps latch ON at ≥ 75 °C rising and OFF at ≤ 55 °C falling (do not start at 55 on the way up).
+- FIREPLACE, and AUTO while the valve is fireplace: heater off, thermostats ignored. Both pumps latch ON at the upper limit (default 65 °C) rising and OFF at the lower limit (default 55 °C) falling. Do not start the pumps at 55 on the way up.
+- Those three limits are edited on the remote Setup page and stored on the relay.
 - Up to two more DS18B20s share GPIO23. Only the learned pipe address runs this logic. `a=` and `b=` are report-only.
 - JC3248W535C remote is `env:remote` (USB-C on the panel). Do not flash it through the C3 bridge. Pins and GUI constraints: `SCREEN.md`.
 

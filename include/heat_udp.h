@@ -17,6 +17,10 @@
 //   MODE ELECTRIC
 //   MODE FIREPLACE
 //   HEAT?            ask for a status reply now
+//   LIM HI 65        fireplace pumps on, rising (saved)
+//   LIM LO 55        fireplace pumps off, falling (saved)
+//   LIM EL 35        AUTO electric below this (saved)
+// Status also carries hi= lo= el=.
 //
 // AUTO selects the valve from the pipe temperature.
 // ELECTRIC forces the electric valve. FIREPLACE forces the fireplace valve.

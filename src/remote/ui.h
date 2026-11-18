@@ -20,6 +20,9 @@ struct RemoteStatus {
   int heat;
   int p1;
   int p2;
+  int hi;
+  int lo;
+  int el;
   bool otaBusy;
   char note[48];
 };

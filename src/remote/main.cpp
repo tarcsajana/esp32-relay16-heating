@@ -68,6 +68,10 @@ static void parseStatus(const char *line) {
   status.heat = kvInt(line, "heat=");
   status.p1 = kvInt(line, "p1=");
   status.p2 = kvInt(line, "p2=");
+  char nbuf[8];
+  if (kv(line, "hi=", nbuf, sizeof(nbuf))) status.hi = atoi(nbuf);
+  if (kv(line, "lo=", nbuf, sizeof(nbuf))) status.lo = atoi(nbuf);
+  if (kv(line, "el=", nbuf, sizeof(nbuf))) status.el = atoi(nbuf);
   lastUdpMs = millis();
   status.udpFresh = true;
 }
@@ -367,6 +371,9 @@ void setup() {
   strncpy(status.mode, "--", sizeof(status.mode));
   strncpy(status.req, "AUTO", sizeof(status.req));
   strncpy(status.valve, "--", sizeof(status.valve));
+  status.hi = 65;
+  status.lo = 55;
+  status.el = 35;
 
   uiBegin();
 
@@ -437,6 +444,33 @@ void loop() {
       runGithubOta();
     } else if (strcmp(tap, "WIFI_RESET") == 0) {
       forgetWifi();
+    } else if (strcmp(tap, "HI+") == 0 || strcmp(tap, "HI-") == 0 ||
+               strcmp(tap, "LO+") == 0 || strcmp(tap, "LO-") == 0 ||
+               strcmp(tap, "EL+") == 0 || strcmp(tap, "EL-") == 0) {
+      char kind = tap[0];
+      int dir = tap[2] == '+' ? 1 : -1;
+      int *slot = kind == 'H' ? &status.hi : kind == 'L' ? &status.lo : &status.el;
+      *slot += dir;
+      if (kind == 'E') {
+        if (status.lo <= status.el) status.lo = status.el + 1;
+        if (status.hi <= status.lo) status.hi = status.lo + 1;
+      } else if (kind == 'L') {
+        if (status.lo <= status.el) status.el = status.lo - 1;
+        if (status.hi <= status.lo) status.hi = status.lo + 1;
+      } else {
+        if (status.hi <= status.lo) status.lo = status.hi - 1;
+        if (status.lo <= status.el) status.el = status.lo - 1;
+      }
+      if (status.el < 10) status.el = 10;
+      if (status.lo <= status.el) status.lo = status.el + 1;
+      if (status.hi <= status.lo) status.hi = status.lo + 1;
+      if (status.hi > 95) status.hi = 95;
+      const char *name = kind == 'H' ? "HI" : kind == 'L' ? "LO" : "EL";
+      int sent = kind == 'H' ? status.hi : kind == 'L' ? status.lo : status.el;
+      char cmd[24];
+      snprintf(cmd, sizeof(cmd), "LIM %s %d", name, sent);
+      sendToRelay(cmd);
+      Serial.println(cmd);
     } else {
       char cmd[32];
       snprintf(cmd, sizeof(cmd), "MODE %s", tap);

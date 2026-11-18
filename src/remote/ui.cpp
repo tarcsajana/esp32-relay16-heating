@@ -54,8 +54,19 @@ static Btn modeBtns[3] = {
 };
 static Btn setupOpen = {12, 6, 108, 36, "SETUP", "SETUP", COL_MUTED, 2};
 static Btn backBtn = {210, 8, 98, 36, "Back", "BACK", COL_MUTED, 2};
-static Btn otaBtn = {16, 288, 288, 62, "OTA from GitHub", "OTA", COL_AUTO, 2};
-static Btn wifiBtn = {16, 366, 288, 62, "Reset Wi-Fi", "WIFI_RESET", COL_BAD, 2};
+static Btn limMinus[3] = {
+    {16, 56, 72, 56, "-", "HI-", COL_MUTED, 3},
+    {16, 124, 72, 56, "-", "LO-", COL_MUTED, 3},
+    {16, 192, 72, 56, "-", "EL-", COL_MUTED, 3},
+};
+static Btn limPlus[3] = {
+    {232, 56, 72, 56, "+", "HI+", COL_MUTED, 3},
+    {232, 124, 72, 56, "+", "LO+", COL_MUTED, 3},
+    {232, 192, 72, 56, "+", "EL+", COL_MUTED, 3},
+};
+static const char *limName[3] = {"Pumps on", "Pumps off", "Electric below"};
+static Btn otaBtn = {16, 264, 288, 56, "OTA from GitHub", "OTA", COL_AUTO, 2};
+static Btn wifiBtn = {16, 332, 288, 56, "Reset Wi-Fi", "WIFI_RESET", COL_BAD, 2};
 
 static void centerText(const char *s, int y, int size, uint16_t color) {
   gfx->setTextSize(size);
@@ -214,22 +225,25 @@ static void drawSetup() {
   labelAt("Setup", 16, 14, 2, COL_TEXT);
   drawButton(backBtn, false, nullptr);
 
-  gfx->fillRoundRect(16, 52, 288, 216, 16, COL_CARD);
-  labelAt("IP", 32, 68, 1, COL_MUTED);
-  labelAt(st.wifiUp ? st.wifiInfo : (st.portal ? "192.168.4.1" : "--"), 32, 86, 2, COL_TEXT);
-
-  labelAt("Wi-Fi", 32, 122, 1, COL_MUTED);
-  const char *ssid = st.ssid[0] ? st.ssid : (st.portal ? "HeatRemote-Setup" : "--");
-  labelAt(ssid, 32, 140, 2, COL_TEXT);
-
-  labelAt("Page", 32, 176, 1, COL_MUTED);
-  labelAt(st.portal ? "http://192.168.4.1" : "heat-remote.local", 32, 194, 2, COL_TEXT);
-  labelAt("login admin / heatota", 32, 222, 1, COL_MUTED);
+  int values[3] = {
+      st.hi ? st.hi : 65,
+      st.lo ? st.lo : 55,
+      st.el ? st.el : 35,
+  };
+  for (int i = 0; i < 3; i++) {
+    drawButton(limMinus[i], false, "-");
+    drawButton(limPlus[i], false, "+");
+    char val[12];
+    snprintf(val, sizeof(val), "%d C", values[i]);
+    int mid = (limMinus[i].x + limMinus[i].w + limPlus[i].x) / 2;
+    centerTextAt(val, mid, limMinus[i].y + 4, 3, COL_TEXT);
+    centerTextAt(limName[i], mid, limMinus[i].y + 34, 1, COL_MUTED);
+  }
 
   const char *note = st.note[0] ? st.note : (st.otaBusy ? "OTA in progress..." : "");
-  if (note[0]) {
-    labelAt(note, 32, 242, 1, st.otaBusy ? COL_ELEC : COL_MUTED);
-  }
+  if (note[0]) labelAt(note, 16, 404, 1, st.otaBusy ? COL_ELEC : COL_MUTED);
+  labelAt(st.wifiUp ? st.wifiInfo : (st.portal ? "192.168.4.1" : "--"), 16, 424, 1, COL_MUTED);
+  labelAt("login admin / heatota", 16, 444, 1, COL_MUTED);
 
   const char *otaLabel = st.otaBusy ? "OTA running..." : "OTA from GitHub";
   drawButton(otaBtn, st.otaBusy, otaLabel);
@@ -268,6 +282,9 @@ void uiBegin() {
   strncpy(st.mode, "--", sizeof(st.mode));
   strncpy(st.req, "AUTO", sizeof(st.req));
   strncpy(st.valve, "--", sizeof(st.valve));
+  st.hi = 65;
+  st.lo = 55;
+  st.el = 35;
   strncpy(st.wifiInfo, "wifi", sizeof(st.wifiInfo));
   haveStatus = true;
   dirty = true;
@@ -302,6 +319,13 @@ const char *uiPollTap() {
           setupPage = false;
           resetArmedUntil = 0;
           dirty = true;
+        } else if (inBtn(limMinus[0], x, y) || inBtn(limPlus[0], x, y) ||
+                   inBtn(limMinus[1], x, y) || inBtn(limPlus[1], x, y) ||
+                   inBtn(limMinus[2], x, y) || inBtn(limPlus[2], x, y)) {
+          for (int i = 0; i < 3; i++) {
+            if (inBtn(limMinus[i], x, y)) hit = limMinus[i].token;
+            else if (inBtn(limPlus[i], x, y)) hit = limPlus[i].token;
+          }
         } else if (inBtn(otaBtn, x, y) && !st.otaBusy) {
           hit = "OTA";
         } else if (inBtn(wifiBtn, x, y) && !st.otaBusy) {

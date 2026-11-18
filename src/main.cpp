@@ -27,10 +27,6 @@ static const int RELAY_PUMP2   = 1;
 static const int RELAY_HEATER  = 2;
 static const int RELAY_VALVE   = 3;  // ON = fireplace circuit, OFF = electric
 
-static const float T_PUMP_ON  = 75.0;  // rising: start both fireplace pumps
-static const float T_PUMP_OFF = 55.0;  // falling: stop both fireplace pumps
-static const float T_FIRE_OFF = 35.0;  // AUTO: electric below this
-
 static const bool BOOT_CLICK_TEST = true;
 
 OneWire oneWire(PIN_ONEWIRE);
@@ -235,16 +231,16 @@ static void controlStep() {
   bool pump1;
   bool pump2;
 
-  // Fireplace pumps: ON at ≥ 75 °C (rising), OFF at ≤ 55 °C (falling).
-  // Between 55 and 75 keep the last state so a warming fire is not cooled at 55.
+  // Fireplace pumps latch on at hi (rising) and off at lo (falling).
+  HeatLimits lim = heatLimits();
   static bool dumpPumps = false;
   if (!sensorOk) dumpPumps = false;
-  else if (t >= T_PUMP_ON) dumpPumps = true;
-  else if (t <= T_PUMP_OFF) dumpPumps = false;
+  else if (t >= (float)lim.hi) dumpPumps = true;
+  else if (t <= (float)lim.lo) dumpPumps = false;
 
   // Electric valve: heater and each pump follow their thermostat. No temp control.
   bool electricValve = (req == HEAT_REQ_ELECTRIC) ||
-      (req == HEAT_REQ_AUTO && (!sensorOk || t < T_FIRE_OFF));
+      (req == HEAT_REQ_AUTO && (!sensorOk || t < (float)lim.el));
 
   if (electricValve) {
     valveFireplace = false;
@@ -270,19 +266,21 @@ static void controlStep() {
   else snprintf(temp, sizeof(temp), "--");
   if (sensorOk) {
     snprintf(statusLine, sizeof(statusLine),
-             "T=%s  a=%s  b=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
+             "T=%s  a=%s  b=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  hi=%d lo=%d el=%d  wifi=%s",
              temp, aTxt, bTxt, modeName, heatRequestName(),
              tstat1 ? 1 : 0, tstat2 ? 1 : 0,
-             valveFireplace ? "FP" : "EL", heater ? 1 : 0, pump1 ? 1 : 0, pump2 ? 1 : 0, wifi);
+             valveFireplace ? "FP" : "EL", heater ? 1 : 0, pump1 ? 1 : 0, pump2 ? 1 : 0,
+             lim.hi, lim.lo, lim.el, wifi);
   } else {
     snprintf(statusLine, sizeof(statusLine),
-             "T=NO_SENSOR ds=%u  a=%s  b=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  wifi=%s",
+             "T=NO_SENSOR ds=%u  a=%s  b=%s  mode=%s  req=%s  t1=%d t2=%d  valve=%s  heat=%d  p1=%d p2=%d  hi=%d lo=%d el=%d  wifi=%s",
              sensors.getDeviceCount(), aTxt, bTxt, modeName, heatRequestName(),
              tstat1 ? 1 : 0, tstat2 ? 1 : 0,
-             valveFireplace ? "FP" : "EL", heater ? 1 : 0, pump1 ? 1 : 0, pump2 ? 1 : 0, wifi);
+             valveFireplace ? "FP" : "EL", heater ? 1 : 0, pump1 ? 1 : 0, pump2 ? 1 : 0,
+             lim.hi, lim.lo, lim.el, wifi);
   }
   snprintf(udpLine, sizeof(udpLine),
-           "HEAT T=%s a=%s b=%s mode=%s req=%s t1=%d t2=%d valve=%s heat=%d p1=%d p2=%d",
+           "HEAT T=%s a=%s b=%s mode=%s req=%s t1=%d t2=%d valve=%s heat=%d p1=%d p2=%d hi=%d lo=%d el=%d",
            temp, aTxt, bTxt,
            modeName,
            heatRequestName(),
@@ -291,7 +289,8 @@ static void controlStep() {
            valveFireplace ? "FP" : "EL",
            heater ? 1 : 0,
            pump1 ? 1 : 0,
-           pump2 ? 1 : 0);
+           pump2 ? 1 : 0,
+           lim.hi, lim.lo, lim.el);
   heatUdpSetPacket(udpLine);
   heatUdpSendStatus();
   Serial.println(statusLine);
